@@ -1,7 +1,7 @@
-self.addEventListener("install", e => {
-    e.waitUntil(
-        caches.open("strike-cache").then(cache => {
-            return cache.addAll(["/", "/static/manifest.json"]);
-        })
-    );
+self.addEventListener("install", () => {
+    self.skipWaiting();
+});
+
+self.addEventListener("activate", () => {
+    clients.claim();
 });

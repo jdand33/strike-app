@@ -3,52 +3,104 @@
 <head>
     <meta charset="utf-8">
     <title>Covered Call Picker</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <!-- iPhone PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon.png">
 
     <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            margin: 1.5rem;
-            line-height: 1.4;
+        :root {
+            --bg: #f5f5f7;
+            --card: #ffffff;
+            --text: #111;
+            --accent: #007aff;
+            --border: #e0e0e0;
         }
-        .field { margin-bottom: 1rem; }
-        label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card: #1c1c1e;
+                --text: #f2f2f7;
+                --accent: #0a84ff;
+                --border: #3a3a3c;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: env(safe-area-inset-top) 1rem env(safe-area-inset-bottom);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .field {
+            margin-bottom: 1.2rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+
         input, select, button {
             width: 100%;
-            max-width: 320px;
-            padding: 0.45rem;
-            font-size: 1rem;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
         }
+
         button {
-            cursor: pointer;
-            background: #222;
+            background: var(--accent);
             color: white;
             border: none;
-            border-radius: 4px;
+            font-weight: 600;
             margin-top: 0.5rem;
         }
+
         .error {
-            color: #b00020;
-            margin-bottom: 1rem;
+            color: #ff453a;
             font-weight: 600;
+            margin-bottom: 1rem;
         }
+
         .card {
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            padding: 1rem;
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.2rem;
             margin-top: 1.5rem;
-            max-width: 480px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
         }
+
         .row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.05rem;
         }
+
         .row span:first-child {
             font-weight: 600;
         }
+
         hr {
-            margin: 0.75rem 0;
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1rem 0;
         }
     </style>
 </head>
@@ -63,7 +115,6 @@
 
 <form method="post">
 
-    <!-- TICKER INPUT -->
     <div class="field">
         <label for="ticker">Ticker</label>
         <input list="tickers" name="ticker" id="ticker" autocomplete="off"
@@ -75,7 +126,6 @@
         </datalist>
     </div>
 
-    <!-- EXPIRATION DROPDOWN -->
     <div class="field">
         <label for="expiration">Expiration</label>
         <select name="expiration" id="expiration" required>
@@ -92,7 +142,6 @@
         </select>
     </div>
 
-    <!-- DELTA RANGE DROPDOWN -->
     <div class="field">
         <label for="risk">Risk Level (Target Delta)</label>
         <select name="risk" id="risk" required>
@@ -108,10 +157,9 @@
     <button type="submit">Find Call</button>
 </form>
 
-<!-- RESULT CARD -->
 {% if result %}
     <div class="card">
-        <h2>Selected Call</h2>
+        <h2 style="margin-top:0;">Selected Call</h2>
 
         <div class="row"><span>Ticker</span><span>{{ result.ticker }}</span></div>
         <div class="row"><span>Risk Level</span><span>{{ result.risk_label }}</span></div>
@@ -131,6 +179,12 @@
         <div class="row"><span>Annualized Yield</span><span>{{ result.annualized_yield }}%</span></div>
     </div>
 {% endif %}
+
+<script>
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/service-worker.js");
+    }
+</script>
 
 </body>
 </html>

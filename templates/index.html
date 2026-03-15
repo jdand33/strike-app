@@ -102,9 +102,30 @@
 
     <label>Risk Level:</label>
     <select name="risk">
-        <option value="low"      {% if last_inputs and last_inputs.risk == 'low' %}selected{% endif %}>Low (Delta ~0.10)</option>
-        <option value="moderate" {% if last_inputs and last_inputs.risk == 'moderate' %}selected{% endif %}>Moderate (Delta ~0.20)</option>
-        <option value="high"     {% if last_inputs and last_inputs.risk == 'high' %}selected{% endif %}>High (Delta ~0.30)</option>
+        <option value="low" 
+            {% if last_inputs and last_inputs.risk == 'low' %}selected{% endif %}>
+            Low (Δ ~0.10)
+        </option>
+    
+        <option value="low_moderate" 
+            {% if last_inputs and last_inputs.risk == 'low_moderate' %}selected{% endif %}>
+            Low‑Moderate (Δ ~0.15)
+        </option>
+    
+        <option value="moderate" 
+            {% if last_inputs and last_inputs.risk == 'moderate' %}selected{% endif %}>
+            Moderate (Δ ~0.20)
+        </option>
+    
+        <option value="moderate_high" 
+            {% if last_inputs and last_inputs.risk == 'moderate_high' %}selected{% endif %}>
+            Moderate‑High (Δ ~0.25)
+        </option>
+    
+        <option value="high" 
+            {% if last_inputs and last_inputs.risk == 'high' %}selected{% endif %}>
+            High (Δ ~0.30)
+        </option>
     </select>
 
     <button type="submit">Calculate</button>

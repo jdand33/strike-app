@@ -1,7 +1,7 @@
 import os
 import math
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request
 import yfinance as yf
 
 app = Flask(__name__)
@@ -59,16 +59,23 @@ def get_live_price(symbol):
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    ticker = "MCD"
-    t = yf.Ticker(ticker)
-    expirations = t.options  # list of available expiration dates
+    default_ticker = "MCD"
+    t = yf.Ticker(default_ticker)
+    expirations = t.options
 
     result = None
+    last_inputs = None
 
     if request.method == "POST":
         ticker = request.form["ticker"].upper()
         expiration = request.form["expiration"]
         risk = request.form["risk"]
+
+        last_inputs = {
+            "ticker": ticker,
+            "expiration": expiration,
+            "risk": risk
+        }
 
         t = yf.Ticker(ticker)
         price = get_live_price(ticker)
@@ -110,11 +117,11 @@ def index():
         ask = float(row["ask"])
         mid = (bid + ask) / 2 if (bid > 0 and ask > 0) else max(bid, ask)
 
-        # Premium (1 contract = 100 shares)
+        # Premium (rounded to 2 decimals)
         premium = round(mid * 100, 2)
 
         # Covered call metrics
-        breakeven = price - mid
+        breakeven = round(price - mid, 2)
         yield_pct = premium / (price * 100) if price > 0 else 0
         annualized = yield_pct * (365 / days) if days > 0 else 0
 
@@ -124,11 +131,11 @@ def index():
         result = {
             "ticker": ticker,
             "strike": round(real_strike, 2),
-            "premium": round(premium, 2),
+            "premium": premium,
             "mid_price": round(mid, 2),
             "yield": round(yield_pct * 100, 2),
             "annualized": round(annualized * 100, 2),
-            "breakeven": round(breakeven, 2),
+            "breakeven": breakeven,
             "assignment_prob": round(delta, 3),
             "iv": round(iv, 3),
             "risk": risk.capitalize(),
@@ -137,7 +144,7 @@ def index():
             "expiration": expiration
         }
 
-    return render_template("index.html", expirations=expirations, result=result)
+    return render_template("index.html", expirations=expirations, result=result, last_inputs=last_inputs)
 
 # ---------- Render entrypoint ----------
 

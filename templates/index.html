@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Strike Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, Arial;
+            margin: 0;
+            padding: 20px;
+            background: #f7f7f7;
+            color: #000;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 18px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 6px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+
+        button {
+            background: #007aff;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-row button {
+            flex: 1;
+        }
+
+        .result {
+            background: #e9f7ef;
+            border-left: 5px solid #2ecc71;
+        }
+
+        /* DARK MODE */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1c1c1e;
+                color: #f2f2f7;
+            }
+
+            .card {
+                background: #2c2c2e;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+            }
+
+            input, select {
+                background: #3a3a3c;
+                border: 1px solid #555;
+                color: #f2f2f7;
+            }
+
+            button {
+                background: #0a84ff;
+                color: white;
+            }
+
+            .result {
+                background: #1e3a29;
+                border-left: 5px solid #30d158;
+            }
+
+            label {
+                color: #d1d1d6;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>Strike Calculator</h2>
+
+<form method="POST">
+
+    <!-- Ticker -->
+    <div class="card">
+        <label>Ticker Symbol</label>
+        <input id="ticker" name="ticker" type="text" value="MCD" style="text-transform:uppercase;" required>
+    </div>
+
+    <!-- Auto-filled data -->
+    <div class="card">
+        <label>Current Price</label>
+        <input id="price" type="number" step="0.01" name="price" readonly>
+
+        <label>Implied Volatility</label>
+        <input id="iv" type="number" step="0.01" name="iv" readonly>
+    </div>
+
+    <!-- Expiration presets -->
+    <div class="card">
+        <label>Expiration</label>
+        <div class="btn-row">
+            <button type="button" onclick="setDays(getDaysUntil('friday'))">This Friday</button>
+            <button type="button" onclick="setDays(getDaysUntil('next_friday'))">Next Friday</button>
+        </div>
+
+        <input id="days" type="number" name="days" placeholder="Or enter days manually">
+    </div>
+
+    <!-- Risk presets -->
+    <div class="card">
+        <label>Risk Level</label>
+        <div class="btn-row">
+            <button type="button" onclick="setRisk('low')">Safe</button>
+            <button type="button" onclick="setRisk('moderate')">Moderate</button>
+            <button type="button" onclick="setRisk('high')">Aggressive</button>
+        </div>
+
+        <select id="risk" name="risk">
+            <option value="low" selected>Safe</option>
+            <option value="moderate">Moderate</option>
+            <option value="high">Aggressive</option>
+        </select>
+    </div>
+
+    <button type="submit">Calculate Strike</button>
+
+</form>
+
+{% if result %}
+<div class="card result">
+    <h3>Suggested Strike</h3>
+    <p><strong>Ticker:</strong> {{ result.ticker }}</p>
+    <p><strong>Risk:</strong> {{ result.risk }}</p>
+    <p><strong>Target Delta:</strong> {{ result.target_delta }}</p>
+    <p><strong>Strike:</strong> ${{ result.strike }}</p>
+    <p><strong>IV Used:</strong> {{ result.iv }}</p>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const tickerInput = document.getElementById("ticker");
+
+    function loadData() {
+        const symbol = tickerInput.value.toUpperCase();
+
+        fetch(`/price?ticker=${symbol}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById("price").value = data.price || "";
+            });
+
+        fetch(`/iv?ticker=${symbol}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById("iv").value = data.iv || "";
+            });
+    }
+
+    loadData();
+    tickerInput.addEventListener("change", loadData);
+});
+
+function setDays(value) {
+    document.getElementById("days").value = value;
+}
+
+function getDaysUntil(type) {
+    const today = new Date();
+    const day = today.getDay();
+
+    if (type === "friday") {
+        let diff = 5 - day;
+        if (diff < 0) diff += 7;
+        return diff;
+    }
+
+    if (type === "next_friday") {
+        return (5 - day + 7);
+    }
+}
+
+function setRisk(level) {
+    document.getElementById("risk").value = level;
+}
+</script>
+
+</body>
+</html>

@@ -90,7 +90,7 @@ def select_by_delta(options, target_delta):
     best = None
     best_diff = 999
     for opt in options:
-        if opt["option_type"] != "call":
+        if opt.get("option_type") != "call":
             continue
 
         bid = opt.get("bid", 0)
@@ -113,12 +113,17 @@ def select_by_delta(options, target_delta):
 # POLYGON: BUILD OCC SYMBOL
 # ---------------------------------------------------------
 def build_polygon_symbol(ticker, expiration, strike, option_type="call"):
-    y, m, d = expiration.split("-")
-    yy = y[2:]
-    cp = "C" if option_type == "call" else "P"
-    strike_int = int(float(strike) * 1000)
+    # expiration: YYYY-MM-DD
+    year, month, day = expiration.split("-")
+    yy = year[2:]
+
+    cp = "C" if option_type.lower() == "call" else "P"
+
+    # OCC format: strike * 1000, padded to 8 digits
+    strike_int = int(round(float(strike) * 1000))
     strike_str = f"{strike_int:08d}"
-    return f"{ticker.upper()}{yy}{m}{d}{cp}{strike_str}"
+
+    return f"{ticker.upper()}{yy}{month}{day}{cp}{strike_str}"
 
 # ---------------------------------------------------------
 # POLYGON: GET IV
@@ -131,7 +136,10 @@ def get_polygon_iv(option_symbol: str):
         if r.status_code != 200:
             return None
         data = r.json()
-        return data.get("results", {}).get("implied_volatility")
+        results = data.get("results")
+        if not results:
+            return None
+        return results.get("implied_volatility")
     except Exception:
         return None
 
@@ -151,30 +159,43 @@ def index():
         risk_key = request.form.get("risk", "").strip()
 
         if not ticker:
-            return render_template("index.html", error="Please enter a ticker.", expirations=[])
+            return render_template("index.html",
+                                   error="Please enter a ticker.",
+                                   expirations=[])
 
         if not validate_ticker(ticker):
-            return render_template("index.html", error=f"'{ticker}' is not a valid ticker.", expirations=[])
+            return render_template("index.html",
+                                   error=f"'{ticker}' is not a valid ticker.",
+                                   expirations=[])
 
         expirations = get_tradier_expirations(ticker)
         if not expirations:
-            return render_template("index.html", error="No expirations available.", expirations=[])
+            return render_template("index.html",
+                                   error="No expirations available.",
+                                   expirations=[])
 
         if action == "load":
-            return render_template("index.html", expirations=expirations)
+            return render_template("index.html",
+                                   expirations=expirations)
 
         if expiration not in expirations:
-            return render_template("index.html", error="Invalid expiration.", expirations=expirations)
+            return render_template("index.html",
+                                   error="Invalid expiration.",
+                                   expirations=expirations)
 
         target_delta = RISK_TO_DELTA[risk_key]
 
         chain = get_tradier_chain(ticker, expiration)
         if chain is None:
-            return render_template("index.html", error="Unable to pull option data.", expirations=expirations)
+            return render_template("index.html",
+                                   error="Unable to pull option data.",
+                                   expirations=expirations)
 
         best = select_by_delta(chain, target_delta)
         if best is None:
-            return render_template("index.html", error="No liquid strikes found for this risk level.", expirations=expirations)
+            return render_template("index.html",
+                                   error="No liquid strikes found for this risk level.",
+                                   expirations=expirations)
 
         t = yf.Ticker(ticker)
         fi = t.fast_info
@@ -211,7 +232,10 @@ def index():
             "premium": premium
         }
 
-    return render_template("index.html", result=result, error=error, expirations=expirations)
+    return render_template("index.html",
+                           result=result,
+                           error=error,
+                           expirations=expirations)
 
 # ---------------------------------------------------------
 # RUN APP

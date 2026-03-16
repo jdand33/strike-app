@@ -10,24 +10,20 @@ def index():
         expiration = request.form.get("expiration", "").strip()
         risk_key = request.form.get("risk", "").strip()
 
-        # Validate ticker first
         if not validate_ticker(ticker):
             return render_template("index.html",
                                    error=f"'{ticker}' is not a valid ticker with options.",
                                    expirations=[])
 
-        # Load expirations
         expirations = get_expirations(ticker)
         if not expirations:
             return render_template("index.html",
                                    error="No expirations available.",
                                    expirations=[])
 
-        # If user clicked "Get Expirations", stop here
         if action == "load":
             return render_template("index.html", expirations=expirations)
 
-        # If user clicked "Calculate", continue
         if expiration not in expirations:
             return render_template("index.html",
                                    error=f"{expiration} is not a valid expiration.",

@@ -7,17 +7,13 @@ from datetime import datetime
 app = Flask(__name__)
 
 # ---------------------------------------------------------
-# TRADIER CONFIG
+# TRADIER CONFIG (LIVE MODE)
 # ---------------------------------------------------------
 TRADIER_KEY = os.getenv("TRADIER_KEY")
 
-# Choose one:
-TRADIER_CHAIN_URL = "https://sandbox.tradier.com/v1/markets/options/chains"
-TRADIER_EXP_URL = "https://sandbox.tradier.com/v1/markets/options/expirations"
-
-# For live data:
-# TRADIER_CHAIN_URL = "https://api.tradier.com/v1/markets/options/chains"
-# TRADIER_EXP_URL = "https://api.tradier.com/v1/markets/options/expirations"
+# LIVE endpoints
+TRADIER_EXP_URL = "https://api.tradier.com/v1/markets/options/expirations"
+TRADIER_CHAIN_URL = "https://api.tradier.com/v1/markets/options/chains"
 
 HEADERS = {
     "Authorization": f"Bearer {TRADIER_KEY}",
@@ -54,14 +50,14 @@ def validate_ticker(ticker: str) -> bool:
 
 
 # ---------------------------------------------------------
-# GET EXPIRATIONS FROM TRADIER (IMPORTANT FIX)
+# GET EXPIRATIONS FROM TRADIER (LIVE)
 # ---------------------------------------------------------
 def get_tradier_expirations(ticker: str):
     try:
         params = {"symbol": ticker}
         r = requests.get(TRADIER_EXP_URL, headers=HEADERS, params=params)
 
-        # 🔍 DEBUG PRINT — this is what you asked for
+        # Debug print
         print("DEBUG RAW EXP RESPONSE:", r.text)
 
         if r.status_code != 200:
@@ -77,7 +73,7 @@ def get_tradier_expirations(ticker: str):
 
 
 # ---------------------------------------------------------
-# GET OPTION CHAIN FROM TRADIER
+# GET OPTION CHAIN FROM TRADIER (LIVE)
 # ---------------------------------------------------------
 def get_tradier_chain(ticker: str, expiration: str):
     params = {

@@ -31,20 +31,28 @@
             font-size: 15px;
         }
 
-        input, select, button {
+        /* ---------- Unified Input + Dropdown Styling ---------- */
+        input, select {
             width: 100%;
             padding: 14px;
-            margin-top: 6px;
             border-radius: 10px;
             border: 1px solid #ccc;
             font-size: 17px;
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: inherit;
+            color: inherit;
         }
 
         button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
             background: #007aff;
             color: white;
             border: none;
             margin-top: 20px;
+            font-size: 17px;
             font-weight: 600;
         }
 
@@ -115,11 +123,10 @@
         <!-- Ticker -->
         <label for="ticker">Ticker:</label>
         <input type="text" name="ticker" id="ticker"
-           value="{{ request.form.ticker }}"
-           style="text-transform: uppercase;"
-           oninput="this.value = this.value.toUpperCase();"
-           required>
-
+               value="{{ request.form.ticker }}"
+               style="text-transform: uppercase;"
+               oninput="this.value = this.value.toUpperCase();"
+               required>
 
         <!-- Load Expirations -->
         <button type="submit" name="action" value="load">Load Expirations</button>
@@ -150,28 +157,19 @@
         <!-- Risk Level -->
         <label for="risk">Risk Level:</label>
         <select name="risk" id="risk">
-            <option value="very_safe"
-                {% if request.form.risk == 'very_safe' %}selected{% endif %}>
+            <option value="very_safe" {% if request.form.risk == 'very_safe' %}selected{% endif %}>
                 Very Safe (Δ ≈ 0.10)
             </option>
-        
-            <option value="safe"
-                {% if request.form.risk == 'safe' %}selected{% endif %}>
+            <option value="safe" {% if request.form.risk == 'safe' %}selected{% endif %}>
                 Safe (Δ ≈ 0.15)
             </option>
-        
-            <option value="moderate"
-                {% if request.form.risk == 'moderate' %}selected{% endif %}>
+            <option value="moderate" {% if request.form.risk == 'moderate' %}selected{% endif %}>
                 Moderate (Δ ≈ 0.20)
             </option>
-        
-            <option value="aggressive"
-                {% if request.form.risk == 'aggressive' %}selected{% endif %}>
+            <option value="aggressive" {% if request.form.risk == 'aggressive' %}selected{% endif %}>
                 Aggressive (Δ ≈ 0.25)
             </option>
-        
-            <option value="very_aggressive"
-                {% if request.form.risk == 'very_aggressive' %}selected{% endif %}>
+            <option value="very_aggressive" {% if request.form.risk == 'very_aggressive' %}selected{% endif %}>
                 Very Aggressive (Δ ≈ 0.30)
             </option>
         </select>

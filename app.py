@@ -3,7 +3,6 @@ import yfinance as yf
 
 app = Flask(__name__)
 
-# Risk categories mapped to approximate deltas
 RISK_TO_DELTA = {
     "very_safe": 0.10,
     "safe": 0.15,
@@ -56,27 +55,34 @@ def index():
 
     if request.method == "POST":
         ticker = request.form.get("ticker", "").upper().strip()
-        expiration = request.form.get("expiration", "").strip()
         risk_key = request.form.get("risk", "").strip()
+        expiration = request.form.get("expiration", "").strip()
 
-        if not ticker:
-            return render_template("index.html", error="Ticker required.", expirations=[])
-
+        # Validate ticker first
         if not validate_ticker(ticker):
             return render_template("index.html", error=f"'{ticker}' is not a valid ticker with options.", expirations=[])
 
+        # Pull real expiration list immediately
         expirations = get_expirations(ticker)
+
         if not expirations:
             return render_template("index.html", error="No expirations available.", expirations=[])
 
+        # If user hasn't selected an expiration yet, just re-render with the list
+        if expiration == "":
+            return render_template("index.html", expirations=expirations)
+
+        # Validate expiration
         if expiration not in expirations:
             return render_template("index.html", error=f"{expiration} is not a valid expiration.", expirations=expirations)
 
+        # Validate risk
         if risk_key not in RISK_TO_DELTA:
             return render_template("index.html", error="Invalid risk level.", expirations=expirations)
 
         target_delta = RISK_TO_DELTA[risk_key]
 
+        # Pull closest delta strike
         result = get_closest_delta_strike(ticker, expiration, target_delta)
         if result is None:
             return render_template("index.html", error="Unable to pull option data.", expirations=expirations)

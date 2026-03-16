@@ -57,6 +57,7 @@ def validate_ticker(ticker: str) -> bool:
 # GET EXPIRATIONS FROM TRADIER (IMPORTANT FIX)
 # ---------------------------------------------------------
 def get_tradier_expirations(ticker: str):
+    print("DEBUG RAW EXP RESPONSE:", r.text)
     try:
         params = {"symbol": ticker}
         r = requests.get(TRADIER_EXP_URL, headers=HEADERS, params=params)

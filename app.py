@@ -11,14 +11,8 @@ app = Flask(__name__)
 # ---------------------------------------------------------
 TRADIER_KEY = os.getenv("TRADIER_KEY")
 
-# LIVE endpoints
-TRADIER_EXP_URL = "https://api.tradier.com/v1/markets/options/expirations"
-TRADIER_CHAIN_URL = "https://api.tradier.com/v1/markets/options/chains"
-
-HEADERS = {
-    "Authorization": f"Bearer {TRADIER_KEY}",
-    "Accept": "application/json"
-}
+# DEBUG: Show what key the app is actually receiving
+print("DEBUG TRADIER KEY:", TRADIER_KEY)
 
 # Risk tiers mapped to target deltas
 RISK_TO_DELTA = {

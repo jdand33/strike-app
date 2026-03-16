@@ -40,7 +40,11 @@
             cursor: pointer; 
             margin-bottom: 10px; 
         }
-        button:hover { 
+        button:disabled {
+            background: #4b5563;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) { 
             background: #16a34a; 
         }
         .error { 
@@ -83,7 +87,7 @@
         </button>
 
         <label>Expiration</label>
-        <select name="expiration">
+        <select name="expiration" id="expirationSelect">
             {% for exp in expirations %}
                 <option value="{{ exp }}">{{ exp }}</option>
             {% endfor %}
@@ -98,7 +102,7 @@
             <option value="very_aggressive">Very Aggressive (Δ ≈ 0.30)</option>
         </select>
 
-        <button type="submit" onclick="document.getElementById('action').value='calculate'">
+        <button id="calculateBtn" type="submit" onclick="document.getElementById('action').value='calculate'" disabled>
             Calculate
         </button>
 
@@ -117,6 +121,20 @@
         </div>
     {% endif %}
 </div>
+
+<script>
+    const expirationSelect = document.getElementById('expirationSelect');
+    const calculateBtn = document.getElementById('calculateBtn');
+
+    function updateButtonState() {
+        calculateBtn.disabled = !expirationSelect.value;
+    }
+
+    expirationSelect.addEventListener('change', updateButtonState);
+
+    // Run once on page load (important after Get Expirations)
+    updateButtonState();
+</script>
 
 </body>
 </html>

@@ -197,12 +197,14 @@ def index():
         premium = safe_float(best.get("bid"))
 
         # -----------------------------
-        # IV HANDLING (rounded to 3 decimals)
+        # IV HANDLING (with estimated flag)
         # -----------------------------
         iv_raw = safe_float(best.get("greeks", {}).get("iv"))
+        iv_estimated = False
 
         if iv_raw is None:
             iv_raw = black_scholes_iv(price, strike, days_out, premium)
+            iv_estimated = True
 
         if iv_raw is None:
             iv = "N/A"
@@ -220,6 +222,7 @@ def index():
             "risk_label": risk.replace("_", " ").title(),
             "strike": strike,
             "iv": iv,
+            "iv_estimated": iv_estimated,
             "assign_prob": assign_prob,
             "premium": premium
         }

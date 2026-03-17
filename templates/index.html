@@ -57,7 +57,6 @@
             background: #f4f4f4;
         }
 
-        /* 🌙 DARK MODE */
         @media (prefers-color-scheme: dark) {
             body {
                 background: #1c1c1e;
@@ -110,9 +109,9 @@
     <select name="expiration" {% if not expirations %}disabled{% endif %}>
         {% if expirations %}
             {% for e in expirations %}
-                <option value="{{ e.date }}"
-                    {% if request.form.expiration == e.date %}selected{% endif %}>
-                    {{ e.date }}
+                <option value="{{ e }}"
+                    {% if request.form.expiration == e %}selected{% endif %}>
+                    {{ e }}
                 </option>
             {% endfor %}
         {% else %}

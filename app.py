@@ -30,9 +30,6 @@ RISK_TO_DELTA = {
 
 RISK_FREE_RATE = 0.04
 
-# Simple in‑memory cache for chains (per request)
-chain_cache = {}
-
 
 # -----------------------------
 # HELPERS
@@ -71,23 +68,22 @@ def get_tradier_expirations(ticker):
         return []
 
 
-def get_tradier_chain(ticker, expiration):
-    key = f"{ticker}_{expiration}"
-    if key in chain_cache:
-        return chain_cache[key]
-
+# -----------------------------
+# ONE CALL: GET ALL CHAINS
+# -----------------------------
+def get_all_chains(ticker):
+    """
+    Returns ALL expirations + ALL strikes in ONE API call.
+    """
     try:
-        r = requests.get(TRADIER_CHAIN_URL, headers=HEADERS,
-                         params={"symbol": ticker, "expiration": expiration})
+        r = requests.get(TRADIER_CHAIN_URL, headers=HEADERS, params={"symbol": ticker})
         if r.status_code != 200:
-            chain_cache[key] = []
-        else:
-            data = r.json()
-            chain_cache[key] = data.get("options", {}).get("option", [])
-    except:
-        chain_cache[key] = []
+            return []
 
-    return chain_cache[key]
+        data = r.json()
+        return data.get("options", {}).get("option", [])
+    except:
+        return []
 
 
 # -----------------------------
@@ -169,7 +165,6 @@ def compute_effective_delta_and_iv(opt, price, days):
 def compute_full_greeks(opt, price, days, iv, delta_override=None):
     """
     Full Greeks for the final chosen contract only.
-    Returns (delta, gamma, theta, vega).
     """
     t = max(days, 1) / 365.0
     strike = safe_float(opt.get("strike"))
@@ -191,45 +186,10 @@ def compute_full_greeks(opt, price, days, iv, delta_override=None):
 
 
 # -----------------------------
-# EXPIRATION FILTERING
-# -----------------------------
-def expiration_has_usable_calls(ticker, expiration, price, days):
-    chain = get_tradier_chain(ticker, expiration)
-    if not chain:
-        return False
-    for opt in chain:
-        if opt.get("option_type") != "call":
-            continue
-        delta, iv, _ = compute_effective_delta_and_iv(opt, price, days)
-        if delta is not None:
-            return True
-    return False
-
-
-# -----------------------------
-# DEBUG
-# -----------------------------
-@app.route("/debug_chain")
-def debug_chain():
-    ticker = request.args.get("ticker", "").upper().strip()
-    expiration = request.args.get("expiration", "").strip()
-    chain = get_tradier_chain(ticker, expiration)
-    return {
-        "ticker": ticker,
-        "expiration": expiration,
-        "chain_length": len(chain),
-        "sample": chain[:5]
-    }
-
-
-# -----------------------------
 # MAIN ROUTE
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
-    global chain_cache
-    chain_cache = {}  # reset per request
-
     expirations = []
     result = None
     error = None
@@ -246,13 +206,20 @@ def index():
             return render_template("index.html", error="Unable to fetch stock price.")
 
         # -----------------------------
-        # LOAD EXPIRATIONS (filtered)
+        # ONE CALL: load all chains
+        # -----------------------------
+        all_chains = get_all_chains(ticker)
+        if not all_chains:
+            return render_template("index.html", error="Unable to load option chains.")
+
+        # -----------------------------
+        # LOAD EXPIRATIONS
         # -----------------------------
         if action == "load":
             raw_exps = get_tradier_expirations(ticker)
-            filtered = []
             now = datetime.now()
 
+            usable = []
             for e in raw_exps:
                 try:
                     d = datetime.strptime(e, "%Y-%m-%d")
@@ -263,10 +230,19 @@ def index():
                 if days_out <= 0:
                     continue
 
-                if expiration_has_usable_calls(ticker, e, price, days_out):
-                    filtered.append({"date": e, "earnings_week": False})
+                # Check if any call in this expiration has usable delta
+                for opt in all_chains:
+                    if opt.get("expiration_date") != e:
+                        continue
+                    if opt.get("option_type") != "call":
+                        continue
 
-            return render_template("index.html", expirations=filtered)
+                    delta, iv, _ = compute_effective_delta_and_iv(opt, price, days_out)
+                    if delta is not None:
+                        usable.append({"date": e, "earnings_week": False})
+                        break
+
+            return render_template("index.html", expirations=usable)
 
         # -----------------------------
         # CALCULATE
@@ -274,10 +250,10 @@ def index():
         expiration = request.form.get("expiration")
         risk = request.form.get("risk")
 
-        # Repopulate filtered expirations
+        # Repopulate expirations
         raw_exps = get_tradier_expirations(ticker)
-        filtered = []
         now = datetime.now()
+        usable = []
 
         for e in raw_exps:
             try:
@@ -289,10 +265,18 @@ def index():
             if days_out_tmp <= 0:
                 continue
 
-            if expiration_has_usable_calls(ticker, e, price, days_out_tmp):
-                filtered.append({"date": e, "earnings_week": False})
+            for opt in all_chains:
+                if opt.get("expiration_date") != e:
+                    continue
+                if opt.get("option_type") != "call":
+                    continue
 
-        expirations = filtered
+                delta, iv, _ = compute_effective_delta_and_iv(opt, price, days_out_tmp)
+                if delta is not None:
+                    usable.append({"date": e, "earnings_week": False})
+                    break
+
+        expirations = usable
 
         if not expiration:
             return render_template("index.html", expirations=expirations, error="Select an expiration.")
@@ -305,9 +289,8 @@ def index():
 
         target_delta = RISK_TO_DELTA.get(risk, 0.20)
 
-        chain = get_tradier_chain(ticker, expiration)
-        if not chain:
-            return render_template("index.html", expirations=expirations, error="Unable to pull option data.")
+        # Filter chain to selected expiration
+        chain = [opt for opt in all_chains if opt.get("expiration_date") == expiration]
 
         best = None
         best_diff = 999
@@ -332,7 +315,7 @@ def index():
                 best_iv = iv_val
                 best_iv_estimated = iv_estimated
 
-        if not best or best_delta is None:
+        if not best:
             return render_template("index.html", expirations=expirations, error="No valid call options found.")
 
         # 2) Compute full Greeks only for the chosen contract

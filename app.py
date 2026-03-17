@@ -54,11 +54,7 @@ def get_chain(symbol, expiration):
     params = {"symbol": symbol, "expiration": expiration}
 
     r = requests.get(url, headers=tradier_headers(), params=params)
-    if r.status_code != 200:
-        return []
-
-    data = r.json()
-    return data.get("options", {}).get("option", [])
+    return r.json() if r.status_code == 200 else {}
 
 
 # -----------------------------
@@ -74,7 +70,7 @@ DELTA_TARGETS = {
 
 
 # -----------------------------
-# Main route
+# MAIN ROUTE
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -123,7 +119,9 @@ def index():
                                        expirations=expirations,
                                        error=error)
 
-            chain = get_chain(ticker, expiration)
+            chain_raw = get_chain(ticker, expiration)
+            chain = chain_raw.get("options", {}).get("option", [])
+
             if not chain:
                 error = "Could not load option chain."
                 return render_template("index.html",
@@ -157,14 +155,13 @@ def index():
             delta = best["greeks"]["delta"]
             iv = best["greeks"].get("mid_iv")
             premium = best.get("bid")
-            oi = best.get("open_interest")
 
             # Assignment probability (approx)
             assign_prob = round(abs(delta) * 100, 1)
 
             # Days out
             from datetime import datetime
-            exp_clean = expiration.split(":")[0]  # remove :28 if present
+            exp_clean = expiration.split(":")[0]
             d0 = datetime.now()
             d1 = datetime.strptime(exp_clean, "%Y-%m-%d")
             days_out = (d1 - d0).days
@@ -187,6 +184,43 @@ def index():
                                    result=result)
 
     return render_template("index.html")
+
+
+# -----------------------------
+# DEBUG PAGE
+# -----------------------------
+@app.route("/debug")
+def debug():
+    symbol = request.args.get("symbol", "AAPL")
+    expiration = request.args.get("expiration")
+
+    debug_data = {}
+
+    # Quote
+    url_quote = f"{TRADIER_BASE}/markets/quotes"
+    r_quote = requests.get(url_quote, headers=tradier_headers(), params={"symbols": symbol})
+    debug_data["quote_status"] = r_quote.status_code
+    debug_data["quote_raw"] = r_quote.text
+
+    # Expirations
+    url_exp = f"{TRADIER_BASE}/markets/options/expirations"
+    r_exp = requests.get(url_exp, headers=tradier_headers(),
+                         params={"symbol": symbol, "includeAllRoots": "true", "strikes": "false"})
+    debug_data["expirations_status"] = r_exp.status_code
+    debug_data["expirations_raw"] = r_exp.text
+
+    # Chain
+    if expiration:
+        url_chain = f"{TRADIER_BASE}/markets/options/chains"
+        r_chain = requests.get(url_chain, headers=tradier_headers(),
+                               params={"symbol": symbol, "expiration": expiration})
+        debug_data["chain_status"] = r_chain.status_code
+        debug_data["chain_raw"] = r_chain.text
+    else:
+        debug_data["chain_status"] = "No expiration provided"
+        debug_data["chain_raw"] = "Add ?expiration=YYYY-MM-DD"
+
+    return debug_data
 
 
 @app.route("/health")

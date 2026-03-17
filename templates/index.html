@@ -110,7 +110,10 @@
     <select name="expiration" {% if not expirations %}disabled{% endif %}>
         {% if expirations %}
             {% for e in expirations %}
-                <option value="{{ e.date }}">{{ e.date }}</option>
+                <option value="{{ e.date }}"
+                    {% if request.form.expiration == e.date %}selected{% endif %}>
+                    {{ e.date }}
+                </option>
             {% endfor %}
         {% else %}
             <option>Load expirations first...</option>
@@ -119,11 +122,30 @@
 
     <label>Risk Level:</label>
     <select name="risk">
-        <option value="very_safe">Very Safe (Δ ≈ 0.10)</option>
-        <option value="safe">Safe (Δ ≈ 0.15)</option>
-        <option value="moderate" selected>Moderate (Δ ≈ 0.20)</option>
-        <option value="aggressive">Aggressive (Δ ≈ 0.25)</option>
-        <option value="very_aggressive">Very Aggressive (Δ ≈ 0.30)</option>
+        <option value="very_safe"
+            {% if request.form.risk == 'very_safe' %}selected{% endif %}>
+            Very Safe (Δ ≈ 0.10)
+        </option>
+
+        <option value="safe"
+            {% if request.form.risk == 'safe' %}selected{% endif %}>
+            Safe (Δ ≈ 0.15)
+        </option>
+
+        <option value="moderate"
+            {% if request.form.risk == 'moderate' %}selected{% endif %}>
+            Moderate (Δ ≈ 0.20)
+        </option>
+
+        <option value="aggressive"
+            {% if request.form.risk == 'aggressive' %}selected{% endif %}>
+            Aggressive (Δ ≈ 0.25)
+        </option>
+
+        <option value="very_aggressive"
+            {% if request.form.risk == 'very_aggressive' %}selected{% endif %}>
+            Very Aggressive (Δ ≈ 0.30)
+        </option>
     </select>
 
     <button name="action" value="calculate">Calculate</button>

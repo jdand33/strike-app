@@ -313,7 +313,16 @@ def index():
             return render_template("index.html", expirations=expirations, error="No valid call options found.")
 
         strike = best.get("strike")
-        premium = safe_float(best.get("bid"))
+        bid = safe_float(best.get("bid"))
+        ask = safe_float(best.get("ask"))
+        
+        # Use mid-price when possible
+        if bid and ask and bid > 0 and ask > 0:
+            premium = round((bid + ask) / 2 * 100, 2)   # mid × 100
+        elif bid and bid > 0:
+            premium = round(bid * 100, 2)               # fallback: bid × 100
+        else:
+            premium = None
 
         iv_raw = best_greeks["iv"]
         iv_estimated = best_greeks["iv_estimated"]

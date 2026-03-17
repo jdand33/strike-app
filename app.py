@@ -39,7 +39,6 @@ def safe_float(x):
 
 
 def get_stock_price_tradier(ticker):
-    """Pull stock price directly from Tradier."""
     try:
         r = requests.get(TRADIER_QUOTE_URL, headers=HEADERS, params={"symbols": ticker})
         if r.status_code != 200:
@@ -79,7 +78,6 @@ def get_tradier_chain(ticker, expiration):
 
 
 def black_scholes_iv(price, strike, days, premium):
-    """Simple fallback IV estimate."""
     try:
         t = days / 365
         if t <= 0:
@@ -91,7 +89,7 @@ def black_scholes_iv(price, strike, days, premium):
 
 
 # -----------------------------
-# DEBUG ENDPOINT
+# DEBUG ENDPOINTS
 # -----------------------------
 @app.route("/debug")
 def debug():
@@ -109,6 +107,24 @@ def debug():
         "token_present": token_present,
         "token_valid": valid_token,
         "tradier_status_code": status
+    }
+
+
+@app.route("/debug_chain")
+def debug_chain():
+    ticker = request.args.get("ticker", "").upper().strip()
+    expiration = request.args.get("expiration", "").strip()
+
+    if not ticker or not expiration:
+        return {"error": "Provide ticker and expiration in query string."}
+
+    chain = get_tradier_chain(ticker, expiration)
+
+    return {
+        "ticker": ticker,
+        "expiration": expiration,
+        "chain_length": len(chain),
+        "sample": chain[:5]
     }
 
 
@@ -152,13 +168,11 @@ def index():
             error = "Select an expiration."
             return render_template("index.html", expirations=expirations, error=error)
 
-        # Stock price from Tradier
         price = get_stock_price_tradier(ticker)
         if price is None:
             error = "Unable to fetch stock price."
             return render_template("index.html", expirations=expirations, error=error)
 
-        # Days until expiration
         try:
             d = datetime.strptime(expiration, "%Y-%m-%d")
             days_out = (d - datetime.now()).days
@@ -166,16 +180,13 @@ def index():
             error = "Invalid expiration date."
             return render_template("index.html", expirations=expirations, error=error)
 
-        # Target delta
         target_delta = RISK_TO_DELTA.get(risk, 0.20)
 
-        # Option chain
         chain = get_tradier_chain(ticker, expiration)
         if not chain:
             error = "Unable to pull option data."
             return render_template("index.html", expirations=expirations, error=error)
 
-        # Find strike closest to target delta
         best = None
         best_diff = 999
 
@@ -199,9 +210,6 @@ def index():
         strike = best.get("strike")
         premium = safe_float(best.get("bid"))
 
-        # -----------------------------
-        # IV HANDLING (with estimated flag)
-        # -----------------------------
         iv_raw = safe_float(best.get("greeks", {}).get("iv"))
         iv_estimated = False
 
@@ -214,7 +222,6 @@ def index():
         else:
             iv = f"{iv_raw:.3f}"
 
-        # Assignment probability (approx)
         assign_prob = round(best.get("greeks", {}).get("delta", 0) * 100, 1)
 
         result = {

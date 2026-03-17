@@ -30,6 +30,9 @@ RISK_TO_DELTA = {
 
 RISK_FREE_RATE = 0.04
 
+# Simple in‑memory cache for chains (per request)
+chain_cache = {}
+
 
 # -----------------------------
 # HELPERS
@@ -69,15 +72,22 @@ def get_tradier_expirations(ticker):
 
 
 def get_tradier_chain(ticker, expiration):
+    key = f"{ticker}_{expiration}"
+    if key in chain_cache:
+        return chain_cache[key]
+
     try:
         r = requests.get(TRADIER_CHAIN_URL, headers=HEADERS,
                          params={"symbol": ticker, "expiration": expiration})
         if r.status_code != 200:
-            return []
-        data = r.json()
-        return data.get("options", {}).get("option", [])
+            chain_cache[key] = []
+        else:
+            data = r.json()
+            chain_cache[key] = data.get("options", {}).get("option", [])
     except:
-        return []
+        chain_cache[key] = []
+
+    return chain_cache[key]
 
 
 # -----------------------------
@@ -108,32 +118,25 @@ def black_scholes_iv(price, strike, days, premium):
 # -----------------------------
 # SYNTHETIC GREEKS (fallback only)
 # -----------------------------
-def compute_effective_greeks(opt, price, days):
+def compute_effective_delta_and_iv(opt, price, days):
     """
-    Uses real Greeks if Tradier provides them.
-    Falls back to synthetic Greeks ONLY when missing.
+    Lightweight: returns (delta, iv, iv_estimated)
+    Used for filtering + strike selection.
     """
     t = max(days, 1) / 365.0
     strike = safe_float(opt.get("strike"))
     if price is None or strike is None or t <= 0:
-        return None, None, None, None, None, False
+        return None, None, False
 
     greeks = opt.get("greeks") or {}
     real_delta = safe_float(greeks.get("delta"))
-    real_gamma = safe_float(greeks.get("gamma"))
-    real_theta = safe_float(greeks.get("theta"))
-    real_vega = safe_float(greeks.get("vega"))
     real_iv = safe_float(greeks.get("iv"))
 
-    # -----------------------------
-    # 1. If Tradier provides delta + IV → use all real Greeks
-    # -----------------------------
+    # If Tradier provides both → use them
     if real_delta is not None and real_iv is not None:
-        return real_delta, real_gamma, real_theta, real_vega, real_iv, False
+        return real_delta, real_iv, False
 
-    # -----------------------------
-    # 2. Otherwise compute synthetic Greeks
-    # -----------------------------
+    # Otherwise, estimate IV from premium if possible
     bid = safe_float(opt.get("bid"))
     ask = safe_float(opt.get("ask"))
     premium = None
@@ -149,15 +152,34 @@ def compute_effective_greeks(opt, price, days):
         if iv:
             iv_estimated = True
 
-    # If we STILL don't have IV → return real delta only
+    # If we still don't have IV, we can only return real delta
     if iv is None or iv <= 0:
-        return real_delta, None, None, None, None, False
+        return real_delta, None, False
 
-    # Compute synthetic Greeks
+    # Compute synthetic delta if needed
+    if real_delta is not None:
+        delta = real_delta
+    else:
+        d1 = bs_d1(price, strike, t, RISK_FREE_RATE, iv)
+        delta = norm_cdf(d1)
+
+    return delta, iv, iv_estimated
+
+
+def compute_full_greeks(opt, price, days, iv, delta_override=None):
+    """
+    Full Greeks for the final chosen contract only.
+    Returns (delta, gamma, theta, vega).
+    """
+    t = max(days, 1) / 365.0
+    strike = safe_float(opt.get("strike"))
+    if price is None or strike is None or t <= 0 or iv is None or iv <= 0:
+        return None, None, None, None
+
     d1 = bs_d1(price, strike, t, RISK_FREE_RATE, iv)
     d2 = bs_d2(d1, iv, t)
 
-    delta = real_delta if real_delta is not None else norm_cdf(d1)
+    delta = delta_override if delta_override is not None else norm_cdf(d1)
     gamma = math.exp(-0.5 * d1 * d1) / (price * iv * math.sqrt(2 * math.pi * t))
     theta = (
         -(price * math.exp(-0.5 * d1 * d1) * iv) / (2 * math.sqrt(2 * math.pi * t))
@@ -165,7 +187,7 @@ def compute_effective_greeks(opt, price, days):
     )
     vega = price * math.exp(-0.5 * d1 * d1) * math.sqrt(t) / math.sqrt(2 * math.pi)
 
-    return delta, gamma, theta, vega, iv, iv_estimated
+    return delta, gamma, theta, vega
 
 
 # -----------------------------
@@ -178,14 +200,14 @@ def expiration_has_usable_calls(ticker, expiration, price, days):
     for opt in chain:
         if opt.get("option_type") != "call":
             continue
-        delta, _, _, _, _, _ = compute_effective_greeks(opt, price, days)
+        delta, iv, _ = compute_effective_delta_and_iv(opt, price, days)
         if delta is not None:
             return True
     return False
 
 
 # -----------------------------
-# DEBUG ENDPOINTS
+# DEBUG
 # -----------------------------
 @app.route("/debug_chain")
 def debug_chain():
@@ -205,6 +227,9 @@ def debug_chain():
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
+    global chain_cache
+    chain_cache = {}  # reset per request
+
     expirations = []
     result = None
     error = None
@@ -286,13 +311,16 @@ def index():
 
         best = None
         best_diff = 999
-        best_greeks = None
+        best_delta = None
+        best_iv = None
+        best_iv_estimated = False
 
+        # 1) Find best contract using delta + IV (lightweight)
         for opt in chain:
             if opt.get("option_type") != "call":
                 continue
 
-            delta, gamma, theta, vega, iv_val, iv_estimated = compute_effective_greeks(opt, price, days_out)
+            delta, iv_val, iv_estimated = compute_effective_delta_and_iv(opt, price, days_out)
             if delta is None:
                 continue
 
@@ -300,35 +328,28 @@ def index():
             if diff < best_diff:
                 best_diff = diff
                 best = opt
-                best_greeks = {
-                    "delta": delta,
-                    "gamma": gamma,
-                    "theta": theta,
-                    "vega": vega,
-                    "iv": iv_val,
-                    "iv_estimated": iv_estimated
-                }
+                best_delta = delta
+                best_iv = iv_val
+                best_iv_estimated = iv_estimated
 
-        if not best:
+        if not best or best_delta is None:
             return render_template("index.html", expirations=expirations, error="No valid call options found.")
 
-        strike = best.get("strike")
+        # 2) Compute full Greeks only for the chosen contract
+        full_delta, gamma, theta, vega = compute_full_greeks(best, price, days_out, best_iv, delta_override=best_delta)
+
+        # 3) Premium: mid × 100, fallback to bid × 100
         bid = safe_float(best.get("bid"))
         ask = safe_float(best.get("ask"))
-        
-        # Use mid-price when possible
         if bid and ask and bid > 0 and ask > 0:
-            premium = round((bid + ask) / 2 * 100, 2)   # mid × 100
+            premium = round((bid + ask) / 2 * 100, 2)
         elif bid and bid > 0:
-            premium = round(bid * 100, 2)               # fallback: bid × 100
+            premium = round(bid * 100, 2)
         else:
             premium = None
 
-        iv_raw = best_greeks["iv"]
-        iv_estimated = best_greeks["iv_estimated"]
-
-        iv = "N/A" if iv_raw is None else f"{iv_raw:.3f}"
-        assign_prob = round(best_greeks["delta"] * 100, 1)
+        iv_display = "N/A" if best_iv is None else f"{best_iv:.3f}"
+        assign_prob = round(best_delta * 100, 1)
 
         result = {
             "ticker": ticker,
@@ -336,15 +357,15 @@ def index():
             "expiration": expiration,
             "days_out": days_out,
             "risk_label": risk.replace("_", " ").title(),
-            "strike": strike,
-            "iv": iv,
-            "iv_estimated": iv_estimated,
+            "strike": best.get("strike"),
+            "iv": iv_display,
+            "iv_estimated": best_iv_estimated,
             "assign_prob": assign_prob,
             "premium": premium,
-            "delta": best_greeks["delta"],
-            "gamma": best_greeks["gamma"],
-            "theta": best_greeks["theta"],
-            "vega": best_greeks["vega"]
+            "delta": full_delta,
+            "gamma": gamma,
+            "theta": theta,
+            "vega": vega
         }
 
     return render_template("index.html",

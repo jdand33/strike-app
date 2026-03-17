@@ -1,6 +1,5 @@
 import os
 import requests
-import yfinance as yf
 from flask import Flask, render_template, request
 from datetime import datetime
 import math
@@ -11,8 +10,10 @@ app = Flask(__name__)
 # CONFIG
 # -----------------------------
 TRADIER_TOKEN = os.getenv("TRADIER_TOKEN")
+
 TRADIER_EXP_URL = "https://api.tradier.com/v1/markets/options/expirations"
 TRADIER_CHAIN_URL = "https://api.tradier.com/v1/markets/options/chains"
+TRADIER_QUOTE_URL = "https://api.tradier.com/v1/markets/quotes"
 
 HEADERS = {
     "Authorization": f"Bearer {TRADIER_TOKEN}",
@@ -33,6 +34,23 @@ RISK_TO_DELTA = {
 def safe_float(x):
     try:
         return float(x)
+    except:
+        return None
+
+
+def get_stock_price_tradier(ticker):
+    """Pull stock price directly from Tradier."""
+    try:
+        r = requests.get(TRADIER_QUOTE_URL, headers=HEADERS, params={"symbols": ticker})
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+        quote = data.get("quotes", {}).get("quote")
+        if not quote:
+            return None
+
+        return safe_float(quote.get("last"))
     except:
         return None
 
@@ -61,6 +79,7 @@ def get_tradier_chain(ticker, expiration):
 
 
 def black_scholes_iv(price, strike, days, premium):
+    """Simple fallback IV estimate."""
     try:
         t = days / 365
         if t <= 0:
@@ -79,11 +98,7 @@ def debug():
     token_present = TRADIER_TOKEN is not None and len(TRADIER_TOKEN.strip()) > 0
 
     try:
-        r = requests.get(
-            "https://api.tradier.com/v1/markets/quotes",
-            headers=HEADERS,
-            params={"symbols": "AAPL"}
-        )
+        r = requests.get(TRADIER_QUOTE_URL, headers=HEADERS, params={"symbols": "AAPL"})
         status = r.status_code
         valid_token = (status == 200)
     except Exception as e:
@@ -134,10 +149,8 @@ def index():
             error = "Select an expiration."
             return render_template("index.html", error=error)
 
-        # Stock price
-        stock = yf.Ticker(ticker)
-        price = safe_float(stock.fast_info.get("last_price"))
-
+        # Stock price from Tradier
+        price = get_stock_price_tradier(ticker)
         if price is None:
             error = "Unable to fetch stock price."
             return render_template("index.html", error=error)
@@ -194,7 +207,7 @@ def index():
         if iv_raw is None:
             iv = "N/A"
         else:
-            iv = f"{iv_raw:.3f}"   # <--- ROUND TO 3 DECIMALS
+            iv = f"{iv_raw:.3f}"
 
         # Assignment probability (approx)
         assign_prob = round(best.get("greeks", {}).get("delta", 0) * 100, 1)
